@@ -1,72 +1,80 @@
+// app/api/posts/[id]/apply/route.ts
 import { NextResponse } from "next/server";
-import dbConnect from "@/lib/mongodb";
-import Post from "@/models/Post";
-import Application from "@/models/Application";
-import { CreateApplicationSchema } from "@/lib/validation/schemas";
+import { cookies } from "next/headers";
+import { connectToDatabase } from "@/lib/db";
+import { Post } from "@/models/Post";
 
-// POST /api/posts/:id/apply - 참여 신청 (중복 신청 방지)
 export async function POST(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
-    const userId = req.headers.get("x-user-id");
+    const resolvedParams = await params;
+    const postId = resolvedParams.id;
+
+    const cookieStore = await cookies();
+    const userId = cookieStore.get("userId")?.value;
+
     if (!userId) {
-      return NextResponse.json({ message: "인증이 필요합니다." }, { status: 401 });
+      return NextResponse.json(
+        { message: "로그인이 필요합니다." },
+        { status: 401 }
+      );
     }
 
-    const body = await req.json();
-    const result = CreateApplicationSchema.safeParse(body);
+    await connectToDatabase();
+    const post = await Post.findById(postId);
 
-    if (!result.success) {
+    if (!post) {
       return NextResponse.json(
-        { message: result.error.issues[0].message },
+        { message: "게시글을 찾을 수 없습니다." },
+        { status: 404 }
+      );
+    }
+
+    // 1. 작성자 본인 지원 불가
+    if (post.author && post.author.toString() === userId) {
+      return NextResponse.json(
+        { message: "본인이 작성한 모임에는 지원할 수 없습니다." },
         { status: 400 }
       );
     }
 
-    await dbConnect();
+    // 2. 이미 지원했는지 검증 (중복 지원 방지)
+    const applicants = post.applicants || [];
+    const isAlreadyApplied = applicants.some(
+      (id: any) => id.toString() === userId
+    );
 
-    // 1. 게시글 존재 여부 및 모집 상태 확인
-    const post = await Post.findById(params.id);
-    if (!post) {
-      return NextResponse.json({ message: "존재하지 않는 모집글입니다." }, { status: 404 });
-    }
-
-    if (post.status === "COMPLETED") {
-      return NextResponse.json({ message: "이미 모집이 완료된 글입니다." }, { status: 400 });
-    }
-
-    // 2. 작성자 본인의 셀프 신청 차단
-    if (post.author.toString() === userId) {
-      return NextResponse.json({ message: "본인이 작성한 글에는 신청할 수 없습니다." }, { status: 400 });
-    }
-
-    // 3. 중복 신청 검증
-    const existingApplication = await Application.findOne({
-      postId: params.id,
-      applicant: userId,
-    });
-
-    if (existingApplication) {
+    if (isAlreadyApplied) {
       return NextResponse.json(
-        { message: "이미 참여 신청한 모집글입니다." },
-        { status: 409 } // 409 Conflict
+        { message: "이미 지원한 게시글입니다." },
+        { status: 400 }
       );
     }
 
-    // 4. 신청 저장
-    const newApplication = await Application.create({
-      postId: params.id,
-      applicant: userId,
-      message: result.data.message,
-    });
+    // 3. 정원 초과 검증
+    if ((post.applicantsCount || 0) >= (post.capacity || 1)) {
+      return NextResponse.json(
+        { message: "모집 인원이 이미 완료되었습니다." },
+        { status: 400 }
+      );
+    }
+
+    // 4. 지원 처리 (지원자 배열 추가 및 카운트 증가)
+    post.applicants.push(userId);
+    post.applicantsCount = post.applicants.length;
+    await post.save();
 
     return NextResponse.json(
-      { success: true, message: "참여 신청이 완료되었습니다.", data: newApplication },
-      { status: 201 }
+      {
+        message: "지원 신청이 완료되었습니다.",
+        applicantsCount: post.applicantsCount,
+      },
+      { status: 200 }
     );
   } catch (error) {
-    return NextResponse.json({ message: "서버 오류가 발생했습니다." }, { status: 500 });
+    console.error("APPLY API Error:", error);
+    return NextResponse.json({ message: "지원 처리 실패" }, { status: 500 });
   }
 }

@@ -1,26 +1,22 @@
+// app/api/auth/login/route.ts
 import { NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
-import dbConnect from "@/lib/mongodb";
-import User from "@/models/User";
-import { LoginSchema } from "@/lib/validation/schemas";
-import { signToken } from "@/lib/auth";
+import { connectToDatabase } from "@/lib/db";
+import { User } from "@/models/User";
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const result = LoginSchema.safeParse(body);
+    const { email, password } = await req.json();
 
-    if (!result.success) {
+    if (!email || !password) {
       return NextResponse.json(
-        { message: result.error.issues[0].message },
+        { message: "이메일과 비밀번호를 모두 입력해 주세요." },
         { status: 400 }
       );
     }
 
-    const { email, password } = result.data;
-    await dbConnect();
+    await connectToDatabase();
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email, password });
     if (!user) {
       return NextResponse.json(
         { message: "이메일 또는 비밀번호가 일치하지 않습니다." },
@@ -28,40 +24,32 @@ export async function POST(req: Request) {
       );
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
-      return NextResponse.json(
-        { message: "이메일 또는 비밀번호가 일치하지 않습니다." },
-        { status: 401 }
-      );
-    }
+    const userIdStr = user._id.toString();
 
-    // JWT 토큰 생성
-    const token = await signToken({
-      userId: user._id.toString(),
-      email: user.email,
-      nickname: user.nickname,
-    });
-
-    // HTTP-Only 쿠키 설정
+    // 응답 객체 생성 및 쿠키 설정
     const response = NextResponse.json(
       {
         message: "로그인 성공",
-        user: { id: user._id, email: user.email, nickname: user.nickname },
+        user: { id: userIdStr, email: user.email, nickname: user.nickname },
       },
       { status: 200 }
     );
 
-    response.cookies.set("token", token, {
+    // 쿠키 설정
+    response.cookies.set("userId", userIdStr, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 60 * 60 * 24 * 7, // 7일
+      sameSite: "lax",
       path: "/",
+      maxAge: 60 * 60 * 24 * 7, // 7일 유지
     });
 
     return response;
   } catch (error) {
-    return NextResponse.json({ message: "서버 오류가 발생했습니다." }, { status: 500 });
+    console.error("로그인 API 에러:", error);
+    return NextResponse.json(
+      { message: "로그인 처리 중 오류가 발생했습니다." },
+      { status: 500 }
+    );
   }
 }

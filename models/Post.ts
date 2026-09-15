@@ -1,29 +1,19 @@
-import mongoose, { Schema, Document } from "mongoose";
+// models/Post.ts
+import mongoose, { Schema, model, models } from "mongoose";
 
-export interface IPost extends Document {
-  title: string;
-  content: string;
-  capacity: number;
-  techStack: string[];
-  meetingType: "ONLINE" | "OFFLINE" | "HYBRID";
-  contactLink?: string;
-  status: "RECRUITING" | "COMPLETED";
-  author: mongoose.Types.ObjectId;
-  createdAt: Date;
-}
-
-const PostSchema = new Schema<IPost>(
+const PostSchema = new Schema(
   {
     title: { type: String, required: true },
     content: { type: String, required: true },
-    capacity: { type: Number, required: true },
-    techStack: { type: [String], default: [] },
-    meetingType: { type: String, enum: ["ONLINE", "OFFLINE", "HYBRID"], required: true },
-    contactLink: { type: String, default: "" },
-    status: { type: String, enum: ["RECRUITING", "COMPLETED"], default: "RECRUITING" },
+    category: { type: String, default: "기타" },
+    capacity: { type: Number, required: true, default: 1 },
+    applicantsCount: { type: Number, default: 0 },
+    applicants: [{ type: Schema.Types.ObjectId, ref: "User" }],
     author: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    isSecret: { type: Boolean, default: false }, // 비밀글 여부
+    password: { type: String, default: "" }, // 비밀글 비밀번호
   },
   { timestamps: true }
 );
 
-export default mongoose.models.Post || mongoose.model<IPost>("Post", PostSchema);
+export const Post = models.Post || model("Post", PostSchema);

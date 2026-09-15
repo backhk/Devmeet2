@@ -1,171 +1,147 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Header from "@/components/common/Header";
 
 export default function NewPostPage() {
-  const router = useRouter();
-  const [formData, setFormData] = useState({
-    title: "",
-    content: "",
-    capacity: 2,
-    meetingType: "ONLINE",
-    techStack: "",
-    contactLink: "",
-  });
-  const [error, setError] = useState("");
-
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
-  ) => {
-    const { name, value } = e.target;
-    setFormData({
-      ...formData,
-      [name]: name === "capacity" ? Number(value) : value,
-    });
-  };
+  const [title, setTitle] = useState("");
+  const [category, setCategory] = useState("스터디");
+  const [capacity, setCapacity] = useState(4);
+  const [content, setContent] = useState("");
+  const [isSecret, setIsSecret] = useState(false);
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
+    if (isSecret && !password) {
+      alert("비밀글 비밀번호를 입력해 주세요.");
+      return;
+    }
 
-    const payload = {
-      ...formData,
-      techStack: formData.techStack
-        .split(",")
-        .map((tech) => tech.trim())
-        .filter(Boolean),
-    };
-
+    setSubmitting(true);
     try {
       const res = await fetch("/api/posts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          title,
+          category,
+          capacity,
+          content,
+          isSecret,
+          password,
+        }),
       });
 
       const data = await res.json();
 
-      if (!res.ok) {
-        throw new Error(data.message || "게시글 등록에 실패했습니다.");
+      if (res.ok) {
+        alert("모집글이 성공적으로 작성되었습니다!");
+        window.location.href = "/";
+      } else {
+        alert(data.message || "작성에 실패했습니다.");
       }
-
-      router.push("/");
-      router.refresh();
-    } catch (err: any) {
-      setError(err.message);
+    } catch {
+      alert("오류가 발생했습니다.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 text-gray-900">
       <Header />
-      <main className="max-w-2xl mx-auto px-6 py-8">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">모집글 작성</h1>
-
-        {error && (
-          <div className="bg-red-50 text-red-600 p-3 rounded-md text-sm mb-4">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg border space-y-5">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">제목</label>
-            <input
-              type="text"
-              name="title"
-              required
-              value={formData.title}
-              onChange={handleChange}
-              placeholder="예: Next.js + MongoDB 사이드 프로젝트 함께하실 분"
-              className="w-full px-3 py-2 border rounded-md text-gray-900 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
+      <main className="max-w-2xl mx-auto py-10 px-4">
+        <div className="bg-white p-8 rounded-2xl shadow-md border border-gray-200">
+          <h1 className="text-2xl font-black mb-6 text-gray-900">새 모집글 작성</h1>
+          <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">진행 방식</label>
-              <select
-                name="meetingType"
-                value={formData.meetingType}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border rounded-md text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="ONLINE">온라인</option>
-                <option value="OFFLINE">오프라인</option>
-                <option value="HYBRID">혼합 (온/오프라인)</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">모집 인원</label>
+              <label className="block text-sm font-bold text-gray-900 mb-2">제목</label>
               <input
-                type="number"
-                name="capacity"
-                min="1"
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
                 required
-                value={formData.capacity}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border rounded-md text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-600 text-sm font-medium"
+                placeholder="제목을 입력하세요"
               />
             </div>
-          </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">기술 스택 (쉼표로 구분)</label>
-            <input
-              type="text"
-              name="techStack"
-              value={formData.techStack}
-              onChange={handleChange}
-              placeholder="React, TypeScript, Next.js"
-              className="w-full px-3 py-2 border rounded-md text-gray-900 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-2">카테고리</label>
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-600 text-sm font-medium bg-white"
+                >
+                  <option value="스터디">스터디</option>
+                  <option value="프로젝트">프로젝트</option>
+                  <option value="모각코">모각코</option>
+                  <option value="기타">기타</option>
+                </select>
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">연락 / 오픈채팅 링크</label>
-            <input
-              type="url"
-              name="contactLink"
-              value={formData.contactLink}
-              onChange={handleChange}
-              placeholder="https://open.kakao.com/..."
-              className="w-full px-3 py-2 border rounded-md text-gray-900 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-2">모집 인원</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={capacity}
+                  onChange={(e) => setCapacity(Number(e.target.value))}
+                  required
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-600 text-sm font-medium"
+                />
+              </div>
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">상세 내용</label>
-            <textarea
-              name="content"
-              rows={6}
-              required
-              value={formData.content}
-              onChange={handleChange}
-              placeholder="프로젝트 목적, 일정, 진행 방식 등을 자유롭게 설명해 주세요."
-              className="w-full px-3 py-2 border rounded-md text-gray-900 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
+            <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl space-y-3">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={isSecret}
+                  onChange={(e) => setIsSecret(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                />
+                <span className="text-sm font-bold text-gray-900">🔒 비밀글로 설정하기</span>
+              </label>
 
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={() => router.back()}
-              className="px-4 py-2 border rounded-md text-gray-600 hover:bg-gray-50 text-sm font-medium"
-            >
-              취소
-            </button>
+              {isSecret && (
+                <div>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required={isSecret}
+                    className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-600 text-sm font-medium"
+                    placeholder="비밀번호 4자리 이상 입력"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold text-gray-900 mb-2">상세 내용</label>
+              <textarea
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                required
+                rows={6}
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-600 text-sm font-medium"
+                placeholder="모임에 대한 자세한 내용을 적어주세요."
+              />
+            </div>
+
             <button
               type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium"
+              disabled={submitting}
+              className="w-full py-3.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-all shadow-md disabled:bg-gray-400"
             >
-              등록하기
+              {submitting ? "등록 중..." : "등록하기"}
             </button>
-          </div>
-        </form>
+          </form>
+        </div>
       </main>
     </div>
   );
