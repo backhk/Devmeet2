@@ -10,7 +10,7 @@ export async function PATCH(
 ) {
   try {
     const resolvedParams = await params;
-    const applicationId = resolvedParams.id;
+    const postId = resolvedParams.id;
 
     const cookieStore = await cookies();
     const userId = cookieStore.get("userId")?.value;
@@ -22,18 +22,18 @@ export async function PATCH(
       );
     }
 
-    const { status } = await req.json(); // "ACCEPTED" 또는 "REJECTED"
+    const { applicationId, status } = await req.json(); // status: "ACCEPTED" | "REJECTED"
 
     if (!["ACCEPTED", "REJECTED"].includes(status)) {
       return NextResponse.json(
-        { message: "유효하지 않은 상태 값입니다." },
+        { message: "올바르지 않은 상태 값입니다." },
         { status: 400 }
       );
     }
 
     await connectToDatabase();
 
-    const application = await Application.findById(applicationId).populate("post");
+    const application = await Application.findById(applicationId);
     if (!application) {
       return NextResponse.json(
         { message: "지원 내역을 찾을 수 없습니다." },
@@ -41,8 +41,14 @@ export async function PATCH(
       );
     }
 
-    // 해당 게시글 작성자 본인만 승인/거절 처리 가능
-    const post = application.post as any;
+    const post = await Post.findById(application.post);
+    if (!post) {
+      return NextResponse.json(
+        { message: "게시글을 찾을 수 없습니다." },
+        { status: 404 }
+      );
+    }
+
     if (post.author.toString() !== userId) {
       return NextResponse.json(
         { message: "권한이 없습니다." },
@@ -50,17 +56,69 @@ export async function PATCH(
       );
     }
 
+    const prevStatus = application.status;
+    const applicantIdStr = application.applicant.toString();
+
+    // 동일한 상태로 재요청할 경우 기존 상태 유지
+    if (prevStatus === status) {
+      return NextResponse.json({
+        message: "이미 변경된 상태입니다.",
+        status: application.status,
+        applicantsCount: post.applicantsCount || 0,
+      });
+    }
+
+    // 1. 승인(ACCEPTED)으로 변경하는 경우
+    if (status === "ACCEPTED") {
+      // 정원 초과 여부 검증 (기존 승인자가 아니었던 경우에만)
+      if (
+        prevStatus !== "ACCEPTED" &&
+        (post.applicantsCount || 0) >= (post.capacity || 1)
+      ) {
+        return NextResponse.json(
+          { message: "모집 정원이 이미 가득 찼습니다." },
+          { status: 400 }
+        );
+      }
+
+      // applicants 배열에 추가 (중복 방지)
+      const exists = (post.applicants || []).some(
+        (id: any) => id.toString() === applicantIdStr
+      );
+      if (!exists) {
+        post.applicants.push(application.applicant);
+      }
+    }
+
+    // 2. 거절(REJECTED)로 변경하는 경우 (이전에 ACCEPTED였다면 목록 및 인원에서 차감)
+    if (status === "REJECTED") {
+      post.applicants = (post.applicants || []).filter(
+        (id: any) => id.toString() !== applicantIdStr
+      );
+    }
+
+    // 인원수 재계산 후 저장
+    post.applicantsCount = post.applicants.length;
+    await post.save();
+
     application.status = status;
     await application.save();
 
     return NextResponse.json(
-      { message: `지원 상태가 ${status === "ACCEPTED" ? "승인" : "거절"} 처리되었습니다.`, application },
+      {
+        message:
+          status === "ACCEPTED"
+            ? "지원을 승인하였습니다."
+            : "지원을 거절하였습니다.",
+        status: application.status,
+        applicantsCount: post.applicantsCount,
+      },
       { status: 200 }
     );
   } catch (error) {
-    console.error("APPLICATION STATUS API Error:", error);
+    console.error("STATUS UPDATE ERROR:", error);
     return NextResponse.json(
-      { message: "상태 변경 실패", error: String(error) },
+      { message: "지원 상태 변경 실패" },
       { status: 500 }
     );
   }

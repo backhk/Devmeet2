@@ -49,7 +49,7 @@ export default function MyPage() {
   const [applicantsList, setApplicantsList] = useState<ApplicantDetail[]>([]);
   const [modalLoading, setModalLoading] = useState(false);
 
-  // 1. 데이터 Fetching (캐시 방지 적용)
+  // 1. 데이터 Fetching
   useEffect(() => {
     fetch("/api/users/me", { cache: "no-store" })
       .then((res) => res.json())
@@ -66,7 +66,6 @@ export default function MyPage() {
 
   // 2. 모집 상태 변경 (모집중 / 마감)
   const handleToggleStatus = async (postId: string, currentStatus?: string) => {
-    // status가 없으면 기본값 "open"으로 다룸
     const actualStatus = currentStatus || "open";
     const nextStatus = actualStatus === "open" ? "closed" : "open";
 
@@ -77,9 +76,7 @@ export default function MyPage() {
         body: JSON.stringify({ status: nextStatus }),
       });
 
-      // 💡 디버깅용 콘솔 로그 추가
       const data = await res.json();
-      console.log("STATUS UPDATE RESPONSE:", res.status, data);
 
       if (res.ok) {
         setMyPosts((prev) =>
@@ -124,24 +121,26 @@ export default function MyPage() {
         body: JSON.stringify({ applicationId: appId, status }),
       });
 
+      const data = await res.json();
+
       if (res.ok) {
-        // 지원자 목록 상태 변경
+        // 모달 내 지원자 상태 업데이트
         setApplicantsList((prev) =>
           prev.map((item) => (item._id === appId ? { ...item, status } : item))
         );
 
-        // 승인 시 내 게시글 지원인원(+1) 상태 업데이트
-        if (status === "ACCEPTED") {
+        // 💡 백엔드에서 넘어온 최신 인원수로 내 모집글 지원인원 동기화
+        if (typeof data.applicantsCount === "number") {
           setMyPosts((prev) =>
             prev.map((p) =>
               p._id === selectedPostId
-                ? { ...p, applicantsCount: (p.applicantsCount || 0) + 1 }
+                ? { ...p, applicantsCount: data.applicantsCount }
                 : p
             )
           );
         }
       } else {
-        alert("처리에 실패했습니다.");
+        alert(data.message || "처리에 실패했습니다.");
       }
     } catch {
       alert("오류가 발생했습니다.");
@@ -156,7 +155,7 @@ export default function MyPage() {
     <div className="min-h-screen bg-gray-50 text-gray-900">
       <Header />
       <main className="max-w-4xl mx-auto py-10 px-4 space-y-8">
-        {/* 내 프로필 카드 */}
+        {/* 프로필 카드 */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
           <h1 className="text-2xl font-black text-gray-900 mb-1">
             {user?.nickname || "사용자"} 님
@@ -164,7 +163,7 @@ export default function MyPage() {
           <p className="text-sm text-gray-500 font-medium">{user?.email}</p>
         </div>
 
-        {/* 내가 작성한 모집글 섹션 */}
+        {/* 내가 작성한 모집글 */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
           <h2 className="text-lg font-black text-gray-900 mb-4">내가 작성한 모집글</h2>
           {myPosts.length === 0 ? (
@@ -223,7 +222,7 @@ export default function MyPage() {
           )}
         </div>
 
-        {/* 내 지원 현황 섹션 */}
+        {/* 내 지원 현황 */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
           <h2 className="text-lg font-black text-gray-900 mb-4">내 지원 현황</h2>
           {myApps.length === 0 ? (
@@ -311,61 +310,67 @@ export default function MyPage() {
               <p className="text-center text-sm py-6 text-gray-400">아직 지원자가 없습니다.</p>
             ) : (
               <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
-                {applicantsList.map((app) => (
-                  <div
-                    key={app._id}
-                    className="p-3 bg-gray-50 rounded-xl border border-gray-200 space-y-2"
-                  >
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <span className="font-bold text-sm text-gray-900">
-                          {app.applicant?.nickname || "알 수 없음"}
-                        </span>
-                        <span className="text-xs text-gray-400 ml-2">
-                          ({app.applicant?.email})
+                {applicantsList.map((app) => {
+                  // 💡 PENDING 상태가 아니라면 승인/거절 결정이 완료된 건임
+                  const isProcessed = app.status !== "PENDING";
+
+                  return (
+                    <div
+                      key={app._id}
+                      className="p-3 bg-gray-50 rounded-xl border border-gray-200 space-y-2"
+                    >
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <span className="font-bold text-sm text-gray-900">
+                            {app.applicant?.nickname || "알 수 없음"}
+                          </span>
+                          <span className="text-xs text-gray-400 ml-2">
+                            ({app.applicant?.email})
+                          </span>
+                        </div>
+                        <span
+                          className={`text-xs font-bold px-2 py-0.5 rounded ${
+                            app.status === "ACCEPTED"
+                              ? "bg-blue-100 text-blue-700"
+                              : app.status === "REJECTED"
+                              ? "bg-red-100 text-red-600"
+                              : "bg-yellow-100 text-yellow-700"
+                          }`}
+                        >
+                          {app.status === "ACCEPTED"
+                            ? "승인됨"
+                            : app.status === "REJECTED"
+                            ? "거절됨"
+                            : "대기중"}
                         </span>
                       </div>
-                      <span
-                        className={`text-xs font-bold px-2 py-0.5 rounded ${
-                          app.status === "ACCEPTED"
-                            ? "bg-blue-100 text-blue-700"
-                            : app.status === "REJECTED"
-                            ? "bg-red-100 text-red-600"
-                            : "bg-yellow-100 text-yellow-700"
-                        }`}
-                      >
-                        {app.status === "ACCEPTED"
-                          ? "승인"
-                          : app.status === "REJECTED"
-                          ? "거절"
-                          : "대기"}
-                      </span>
-                    </div>
 
-                    {app.message && (
-                      <p className="text-xs text-gray-600 bg-white p-2 rounded border border-gray-100">
-                        "{app.message}"
-                      </p>
-                    )}
+                      {app.message && (
+                        <p className="text-xs text-gray-600 bg-white p-2 rounded border border-gray-100">
+                          "{app.message}"
+                        </p>
+                      )}
 
-                    <div className="flex gap-2 pt-1 justify-end">
-                      <button
-                        onClick={() => handleUpdateApplicantStatus(app._id, "ACCEPTED")}
-                        disabled={app.status === "ACCEPTED"}
-                        className="px-2.5 py-1 text-xs font-bold bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-                      >
-                        승인
-                      </button>
-                      <button
-                        onClick={() => handleUpdateApplicantStatus(app._id, "REJECTED")}
-                        disabled={app.status === "REJECTED"}
-                        className="px-2.5 py-1 text-xs font-bold bg-red-100 text-red-600 rounded hover:bg-red-200 disabled:opacity-50"
-                      >
-                        거절
-                      </button>
+                      <div className="flex gap-2 pt-1 justify-end">
+                        {/* 💡 승인/거절이 한 번 되면 disabled 되도록 처리 */}
+                        <button
+                          onClick={() => handleUpdateApplicantStatus(app._id, "ACCEPTED")}
+                          disabled={isProcessed}
+                          className="px-2.5 py-1 text-xs font-bold bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all"
+                        >
+                          승인
+                        </button>
+                        <button
+                          onClick={() => handleUpdateApplicantStatus(app._id, "REJECTED")}
+                          disabled={isProcessed}
+                          className="px-2.5 py-1 text-xs font-bold bg-red-100 text-red-600 rounded hover:bg-red-200 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed transition-all"
+                        >
+                          거절
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

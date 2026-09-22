@@ -78,7 +78,7 @@ export default function NewPostPage() {
                 >
                   <option value="스터디">스터디</option>
                   <option value="프로젝트">프로젝트</option>
-                  <option value="모각코">모각코</option>
+                  <option value="모각코">따로따로</option>
                   <option value="기타">기타</option>
                 </select>
               </div>
