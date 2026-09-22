@@ -4,7 +4,8 @@ import { connectToDatabase } from "@/lib/db";
 import { Post } from "@/models/Post";
 import { User } from "@/models/User";
 
-export async function GET() {
+// 1. 게시글 목록 조회 및 검색 (GET)
+export async function GET(req: Request) {
   try {
     const cookieStore = await cookies();
     const userId = cookieStore.get("userId")?.value;
@@ -16,9 +17,29 @@ export async function GET() {
       );
     }
 
+    const { searchParams } = new URL(req.url);
+    const query = searchParams.get("q") || ""; // 검색어 (제목 또는 내용)
+    const category = searchParams.get("category") || ""; // 카테고리 필터
+
     await connectToDatabase();
 
-    const posts = await Post.find()
+    // 동적 검색 조건 생성
+    const filter: any = {};
+
+    // 카테고리 필터링 (전체가 아닐 경우)
+    if (category && category !== "전체") {
+      filter.category = category;
+    }
+
+    // 검색어 필터링 (제목 또는 내용 대상 - 대소문자 무시)
+    if (query.trim() !== "") {
+      filter.$or = [
+        { title: { $regex: query, $options: "i" } },
+        { content: { $regex: query, $options: "i" } },
+      ];
+    }
+
+    const posts = await Post.find(filter)
       .populate({
         path: "author",
         model: User,
@@ -36,6 +57,7 @@ export async function GET() {
   }
 }
 
+// 2. 게시글 등록 (POST)
 export async function POST(req: Request) {
   try {
     const cookieStore = await cookies();
@@ -74,7 +96,7 @@ export async function POST(req: Request) {
       capacity: Number(capacity),
       author: userId,
       applicantsCount: 0,
-      status: "open", // 👈 이 부분을 꼭 추가해주세요!
+      status: "open",
       isSecret: Boolean(isSecret),
       password: isSecret ? String(password) : "",
     });
