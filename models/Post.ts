@@ -1,4 +1,3 @@
-// models/Post.ts
 import mongoose, { Schema, model, models } from "mongoose";
 
 const PostSchema = new Schema(
@@ -10,8 +9,10 @@ const PostSchema = new Schema(
     applicantsCount: { type: Number, default: 0 },
     applicants: [{ type: Schema.Types.ObjectId, ref: "User" }],
     author: { type: Schema.Types.ObjectId, ref: "User", required: true },
-    isSecret: { type: Boolean, default: false }, // 비밀글 여부
-    password: { type: String, default: "" }, // 비밀글 비밀번호
+    isSecret: { type: Boolean, default: false },
+    password: { type: String, default: "" },
+    status: { type: String, enum: ["open", "closed"], default: "open" }, // 모집중 / 마감됨
+    contactLink: { type: String, default: "" }, // 기본값을 빈 문자열("")로 변경
   },
   { timestamps: true }
 );

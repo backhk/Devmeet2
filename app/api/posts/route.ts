@@ -74,6 +74,7 @@ export async function POST(req: Request) {
       capacity: Number(capacity),
       author: userId,
       applicantsCount: 0,
+      status: "open", // 👈 이 부분을 꼭 추가해주세요!
       isSecret: Boolean(isSecret),
       password: isSecret ? String(password) : "",
     });

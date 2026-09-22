@@ -1,4 +1,3 @@
-// components/common/Header.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -58,9 +57,13 @@ export default function Header() {
           ) : user ? (
             /* 로그인 상태인 경우 */
             <div className="flex items-center gap-3">
-              <span className="text-sm font-bold text-gray-700">
+              {/* 닉네임 클릭 시 마이페이지 이동 */}
+              <Link
+                href="/mypage"
+                className="text-sm font-bold text-gray-700 hover:text-blue-600 transition-all flex items-center gap-1"
+              >
                 <span className="text-blue-600">{user.nickname}</span> 님
-              </span>
+              </Link>
               <button
                 onClick={handleLogout}
                 className="px-4 py-2 text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all"

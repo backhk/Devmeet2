@@ -11,6 +11,7 @@ interface PostDetail {
   capacity: number;
   applicantsCount: number;
   applicants?: string[];
+  status?: "open" | "closed";
   author?: { _id?: string; nickname: string; email: string };
   createdAt: string;
   isSecret?: boolean;
@@ -58,6 +59,7 @@ export default function PostDetailPage({
   const isApplied =
     currentUserId &&
     post?.applicants?.some((id) => id.toString() === currentUserId);
+  const isClosed = post?.status === "closed";
 
   useEffect(() => {
     if (isAuthor) setUnlocked(true);
@@ -83,6 +85,7 @@ export default function PostDetailPage({
   };
 
   const handleApply = async () => {
+    if (isClosed) return alert("이미 마감된 모집글입니다.");
     if (isAuthor) return alert("자신의 글에는 지원할 수 없습니다.");
     if (isApplied) return alert("이미 지원한 게시글입니다.");
     if (!currentUserId) return alert("로그인이 필요합니다.");
@@ -158,8 +161,20 @@ export default function PostDetailPage({
             <span className="inline-block bg-blue-100 text-blue-700 font-bold px-3 py-1 rounded-full text-xs">
               {post.category || "기타"}
             </span>
+
+            {/* 모집 상태 뱃지 */}
+            <span
+              className={`inline-block font-bold px-3 py-1 rounded-full text-xs ${
+                isClosed
+                  ? "bg-red-100 text-red-600"
+                  : "bg-green-100 text-green-700"
+              }`}
+            >
+              {isClosed ? "모집마감" : "모집중"}
+            </span>
+
             {post.isSecret && (
-              <span className="inline-block bg-red-100 text-red-600 font-bold px-3 py-1 rounded-full text-xs">
+              <span className="inline-block bg-gray-100 text-gray-600 font-bold px-3 py-1 rounded-full text-xs">
                 🔒 비밀글
               </span>
             )}
@@ -180,15 +195,17 @@ export default function PostDetailPage({
             </span>
 
             <button
-              disabled={Boolean(isAuthor || isApplied || applying)}
+              disabled={Boolean(isClosed || isAuthor || isApplied || applying)}
               onClick={handleApply}
               className={`px-6 py-3 font-bold rounded-xl transition-all shadow-sm ${
-                isAuthor || isApplied
+                isClosed || isAuthor || isApplied
                   ? "bg-gray-200 text-gray-400 cursor-not-allowed"
                   : "bg-blue-600 text-white hover:bg-blue-700"
               }`}
             >
-              {isAuthor
+              {isClosed
+                ? "모집 마감됨"
+                : isAuthor
                 ? "본인 게시글입니다"
                 : isApplied
                 ? "이미 지원함"

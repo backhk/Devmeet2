@@ -1,8 +1,8 @@
-// app/api/posts/[id]/apply/route.ts
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { connectToDatabase } from "@/lib/db";
 import { Post } from "@/models/Post";
+import { Application } from "@/models/Application";
 
 export async function POST(
   req: Request,
@@ -21,6 +21,9 @@ export async function POST(
         { status: 401 }
       );
     }
+
+    // 클라이언트에서 전달받은 message (없으면 빈 문자열)
+    const { message } = await req.json().catch(() => ({ message: "" }));
 
     await connectToDatabase();
     const post = await Post.findById(postId);
@@ -53,7 +56,15 @@ export async function POST(
       );
     }
 
-    // 3. 정원 초과 검증
+    // 💡 3. 모집 마감 상태 검증 (추가된 부분)
+    if (post.status === "closed") {
+      return NextResponse.json(
+        { message: "이미 마감된 모집글에는 지원할 수 없습니다." },
+        { status: 400 }
+      );
+    }
+
+    // 4. 정원 초과 검증
     if ((post.applicantsCount || 0) >= (post.capacity || 1)) {
       return NextResponse.json(
         { message: "모집 인원이 이미 완료되었습니다." },
@@ -61,7 +72,15 @@ export async function POST(
       );
     }
 
-    // 4. 지원 처리 (지원자 배열 추가 및 카운트 증가)
+    // 5. Application 문서 생성 (지원서 DB 저장)
+    await Application.create({
+      post: postId,
+      applicant: userId,
+      message: message || "",
+      status: "PENDING",
+    });
+
+    // 6. Post 모델 지원자 배열 추가 및 카운트 증가
     post.applicants.push(userId);
     post.applicantsCount = post.applicants.length;
     await post.save();
